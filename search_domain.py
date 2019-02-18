@@ -37,38 +37,34 @@ whois = Whois()
 wait = MIN_WAIT
 words = []
 words_i = 0
-occu = []
-free = []
+occu = set()
+free = set()
 
-if WORDLIST.is_file():
-    with open(str(WORDLIST)) as fp:
-        words = [l.rstrip("\n") for l in fp.readlines()]
-else:
-    words = ["".join(comb) for comb in itertools.product((CHARS + NUMS), (CHARS + NUMS + "-"), (CHARS + NUMS))]
-
-half_of_the_words = int(len(words) / 2)
-
-if "alfahosting" in socket.gethostname():
-    print("Upper half")
-    words = words[:half_of_the_words]
-elif "mail" in socket.gethostname():
-    print("Lower half")
-    words = words[half_of_the_words:]
+# Restore
 
 if OCCU_DOMAINS_FILE.is_file():
     with open(str(OCCU_DOMAINS_FILE)) as fp:
-        occu = [l.rstrip("\n") for l in fp.readlines()]
+        occu = set(l.rstrip("\n") for l in fp.readlines())
 
 if FREE_DOMAINS_FILE.is_file():
     with open(str(FREE_DOMAINS_FILE)) as fp:
-        free = [l.rstrip("\n") for l in fp.readlines()]
+        free = set(l.rstrip("\n") for l in fp.readlines())
+
+
+def process_domain(domain, is_free=False):
+    if is_free:
+        print("{}FREE: {}{}".format(GREEN, domain, RESET))
+        free.add(domain)
+    else:
+        print("{}OCCU: {}{}".format(GREY, domain, RESET))
+        occu.add(domain)
 
 
 def store_state():
-    with open(str(OCCU_DOMAINS_FILE), "w") as fp:
+    with open(str(OCCU_DOMAINS_FILE), "w", newline="\n") as fp:
         for item in occu:
             fp.write("{}\n".format(item))
-    with open(str(FREE_DOMAINS_FILE), "w") as fp:
+    with open(str(FREE_DOMAINS_FILE), "w", newline="\n") as fp:
         for item in free:
             fp.write("{}\n".format(item))
 
@@ -81,26 +77,37 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
+#################
+# Words to text #
+#################
+
+if WORDLIST.is_file():
+    with open(str(WORDLIST)) as fp:
+        words = [l.rstrip("\n") for l in fp.readlines()]
+else:
+    words = ["".join(comb) for comb in itertools.product((CHARS + NUMS), (CHARS + NUMS + "-"), (CHARS + NUMS))]
+
+# Shrink words
+words = list(set(words) - occu - free)
+
+# Split to servers
+half_of_the_words = int(len(words) / 2)
+
+if "alfahosting" in socket.gethostname():
+    print("Upper half")
+    words = words[:half_of_the_words]
+elif "mail" in socket.gethostname():
+    print("Lower half")
+    words = words[half_of_the_words:]
+
 words_len = len(words)
 
+# stats
 start_time = datetime.datetime.now()
 last_print_time = start_time
 
-
-def process_domain(domain, is_free=False):
-    if is_free:
-        print("{}FREE: {}{}".format(GREEN, domain, RESET))
-        free.append(domain)
-    else:
-        print("{}OCCU: {}{}".format(GREY, domain, RESET))
-        occu.append(domain)
-
-
 while words_i < words_len:
     domain = "{}.de".format(words[words_i])
-    if domain in occu or domain in free:
-        words_i += 1
-        continue
     try:
         if has_ip(domain):
             process_domain(domain)
@@ -111,10 +118,10 @@ while words_i < words_len:
             else:
                 process_domain(domain)
 
-        if words_i % (PRINT_ITERATIONS * 2) is 0:
+        if words_i != 0 and words_i % (PRINT_ITERATIONS * 2) is 0:
             store_state()
 
-        if words_i % PRINT_ITERATIONS is 0:
+        if words_i != 0 and words_i % PRINT_ITERATIONS is 0:
             now = datetime.datetime.now()
             time_per_domain = (now - last_print_time) / PRINT_ITERATIONS * 0.66 + (now - start_time) / words_i * 0.33
             remaining_time = time_per_domain * (words_len - words_i)

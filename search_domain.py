@@ -3,7 +3,6 @@
 import datetime
 import itertools
 import signal
-import socket
 import sys
 import time
 from pathlib import Path
@@ -40,16 +39,6 @@ words_i = 0
 occu = set()
 free = set()
 
-# Restore
-
-if OCCU_DOMAINS_FILE.is_file():
-    with open(str(OCCU_DOMAINS_FILE)) as fp:
-        occu = set(l.rstrip("\n") for l in fp.readlines())
-
-if FREE_DOMAINS_FILE.is_file():
-    with open(str(FREE_DOMAINS_FILE)) as fp:
-        free = set(l.rstrip("\n") for l in fp.readlines())
-
 
 def process_domain(domain, is_free=False):
     if is_free:
@@ -60,13 +49,27 @@ def process_domain(domain, is_free=False):
         occu.add(domain)
 
 
+def restore_state():
+    global occu, free
+    if OCCU_DOMAINS_FILE.is_file():
+        with open(str(OCCU_DOMAINS_FILE)) as fp:
+            occu = set(l.rstrip("\n") for l in fp.readlines())
+
+    if FREE_DOMAINS_FILE.is_file():
+        with open(str(FREE_DOMAINS_FILE)) as fp:
+            free = set(l.rstrip("\n") for l in fp.readlines())
+
+
 def store_state():
-    with open(str(OCCU_DOMAINS_FILE), "w", newline="\n") as fp:
+    global occu, free
+    with open(str(OCCU_DOMAINS_FILE), "a", newline="\n") as fp:
         for item in occu:
             fp.write("{}\n".format(item))
-    with open(str(FREE_DOMAINS_FILE), "w", newline="\n") as fp:
+    occu = set()
+    with open(str(FREE_DOMAINS_FILE), "a", newline="\n") as fp:
         for item in free:
             fp.write("{}\n".format(item))
+    free = set()
 
 
 # Handle Ctrl + C
@@ -78,27 +81,31 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 #################
-# Words to text #
+# Words to test #
 #################
+
+restore_state()
 
 if WORDLIST.is_file():
     with open(str(WORDLIST)) as fp:
         words = [l.rstrip("\n") for l in fp.readlines()]
 else:
-    words = ["".join(comb) for comb in itertools.product((CHARS + NUMS), (CHARS + NUMS + "-"), (CHARS + NUMS))]
+    words = ["".join(comb) + ".de" for comb in itertools.product((CHARS + NUMS), (CHARS + NUMS + "-"), (CHARS + NUMS))]
 
 # Shrink words
-words = list(set(words) - occu - free)
+words = sorted(set(words) - occu - free)
+free = set()
+occu = set()
 
 # Split to servers
-half_of_the_words = int(len(words) / 2)
-
-if "alfahosting" in socket.gethostname():
-    print("Upper half")
-    words = words[:half_of_the_words]
-elif "mail" in socket.gethostname():
-    print("Lower half")
-    words = words[half_of_the_words:]
+# half_of_the_words = int(len(words) / 2)
+#
+# if "alfahosting" in socket.gethostname():
+#     print("Upper half")
+#     words = words[:half_of_the_words]
+# elif "mail" in socket.gethostname():
+#     print("Lower half")
+#     words = words[half_of_the_words:]
 
 words_len = len(words)
 
@@ -107,7 +114,7 @@ start_time = datetime.datetime.now()
 last_print_time = start_time
 
 while words_i < words_len:
-    domain = "{}.de".format(words[words_i])
+    domain = words[words_i]
     try:
         if has_ip(domain):
             process_domain(domain)

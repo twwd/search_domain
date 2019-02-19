@@ -109,6 +109,8 @@ occu = set()
 
 words_len = len(words)
 
+print("{} domains to test".format(words_len))
+
 # stats
 start_time = datetime.datetime.now()
 last_print_time = start_time

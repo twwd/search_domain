@@ -3,7 +3,6 @@
 import argparse
 import datetime
 import signal
-import sys
 import time
 
 import dns
@@ -17,10 +16,10 @@ group.add_argument('--wordlist', '-w', type=argparse.FileType('r', encoding='utf
 group.add_argument('--pattern', '-p', type=pattern.validator,
                    help='a pattern for .de domain generation. .de is automatically added. Allowed elements: lowercase letters, numbers, dash, '
                         'L for an arbitrary letter, N for an arbitrary number, and A for an arbitrary allowed char.')
-parser.add_argument('--free', type=argparse.FileType('a', encoding='utf-8'), default='free_domains.txt',
-                    help='a file for storing free domains (default: free_domains.txt)')
-parser.add_argument('--occu', type=argparse.FileType('a', encoding='utf-8'), default='occu_domains.txt',
-                    help='a file for storing occupied domains (default: occu_domains.txt)')
+parser.add_argument('--free', type=argparse.FileType('a', encoding='utf-8', bufsize=16), default='data/free.txt',
+                    help='a file for storing free domains (default: data/free.txt)')
+parser.add_argument('--occu', type=argparse.FileType('a', encoding='utf-8', bufsize=16), default='data/occu.txt',
+                    help='a file for storing occupied domains (default: data/occu.txt)')
 parser.add_argument('--skip', type=argparse.FileType('r', encoding='utf-8'), nargs='*', help='one or multiple files containing domains that should be skipped')
 parser.add_argument('--verbose', '-v', action='count', help='enable logging')
 parser.add_argument('--version', action='version', version='%(prog)s 0.1')
@@ -31,7 +30,7 @@ MIN_WAIT = 10
 MAX_WAIT = 300
 WAIT_REQ = 1  # time to wait between whois requests
 
-PRINT_ITERATIONS = 50  # amount of iterations between status output
+MAINTENANCE_ITERATIONS = 2  # number of iterations between status output and finding persitence
 
 # Init
 log = Logger(args.verbose)
@@ -45,6 +44,14 @@ if args.pattern is not None:
     domains = pattern.generate_candiates(args.pattern)
 else:
     domains = [l.rstrip('\n') for l in args.wordlist.readlines()]
+    args.wordlist.close()
+
+
+def shutdown(exit_code=0):
+    global args
+    args.free.close()
+    args.occu.close()
+    exit(exit_code)
 
 
 def skip_domains(domains_to_test, domains_to_skip):
@@ -81,7 +88,8 @@ def process_domain(domain, is_free=False):
 # Handle Ctrl + C
 def signal_handler(sig, frame):
     persist_findings()
-    sys.exit(0)
+    log.log("Stopped by Ctrl + C")
+    shutdown(-1)
 
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -106,17 +114,15 @@ while domains_index < domains_len:
             else:
                 process_domain(domain, True)
 
-        if domains_index != 0 and domains_index % (PRINT_ITERATIONS * 2) is 0:
+        if domains_index != 0 and domains_index % MAINTENANCE_ITERATIONS is 0:
             persist_findings()
-
-        if domains_index != 0 and domains_index % PRINT_ITERATIONS is 0:
             now = datetime.datetime.now()
-            time_per_domain = (now - last_print_time) / PRINT_ITERATIONS * 0.66 + (now - start_time) / domains_index * 0.33
-            remaining_time = time_per_domain * (domains_len - domains_index)
-            remaining_time = remaining_time - datetime.timedelta(microseconds=remaining_time.microseconds)  # remove microseconds for printing
+            if log.log_enabled():
+                time_per_domain = (now - last_print_time) / MAINTENANCE_ITERATIONS * 0.66 + (now - start_time) / domains_index * 0.33
+                remaining_time = time_per_domain * (domains_len - domains_index)
+                remaining_time = remaining_time - datetime.timedelta(microseconds=remaining_time.microseconds)  # remove microseconds for printing
+                log.log('{} of {} ({:.2f}%, approx. {} remaining)'.format(domains_index, domains_len, domains_index / domains_len * 100, remaining_time))
             last_print_time = now
-
-            print('{} of {} ({:.2f}%, approx. {} remaining)'.format(domains_index, domains_len, domains_index / domains_len * 100, remaining_time))
 
         domains_index += 1
 
@@ -129,6 +135,7 @@ while domains_index < domains_len:
     except Exception as e:
         log.error(e, True)
         persist_findings()
-        exit(-1)
+        shutdown(-1)
 
 persist_findings()
+shutdown()

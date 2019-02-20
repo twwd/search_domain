@@ -2,7 +2,7 @@ import argparse
 import itertools
 
 LETTERS = 'abcdefghijklmnopqrstuvwxyz'
-NUMBERS = '0123456789'
+DIGITS = '0123456789'
 
 
 def validator(value):
@@ -16,7 +16,7 @@ def validator(value):
         raise argparse.ArgumentTypeError('{} is not allowed at the beginning or end of the second-level part'.format(value))
 
     for char in value[:-3]:
-        if char not in LETTERS + NUMBERS + 'LNA-':
+        if char not in LETTERS + DIGITS + 'LDA-':
             raise argparse.ArgumentTypeError('{} is not an allowed char'.format(char))
 
     return value
@@ -38,18 +38,18 @@ def generate_candiates(pattern: str):
 
     for i in range(0, len(pattern)):
         c = pattern[i]
-        if c in 'LNA':
+        if c in 'LDA':
             candiates = append_to_items(candiates, tmp_part)  # append chars that occured before
             if c is 'L':
                 candiates = str_product(candiates, LETTERS)
-            elif c is 'N':
-                candiates = str_product(candiates, NUMBERS)
+            elif c is 'D':
+                candiates = str_product(candiates, DIGITS)
             elif c is 'A':
                 # don't add dashes if not beginning or end of the second-level part
                 if i is 0 or i is len(pattern) - 4:
-                    candiates = str_product(candiates, LETTERS + NUMBERS)
+                    candiates = str_product(candiates, LETTERS + DIGITS)
                 else:
-                    candiates = str_product(candiates, LETTERS + NUMBERS + '-')
+                    candiates = str_product(candiates, LETTERS + DIGITS + '-')
         else:
             tmp_part += c
 

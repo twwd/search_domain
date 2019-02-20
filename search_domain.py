@@ -15,7 +15,7 @@ group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('--wordlist', '-w', type=argparse.FileType('r', encoding='utf-8'), help='a file with a list of .de domains to test')
 group.add_argument('--pattern', '-p', type=pattern.validator,
                    help='a pattern for the domain generation. Allowed elements: lowercase letters, numbers, dash, '
-                        'L for an arbitrary letter, N for an arbitrary number, and A for an arbitrary allowed char.')
+                        'L for an arbitrary letter, D for an arbitrary digit, and A for an arbitrary allowed char.')
 parser.add_argument('--free', type=argparse.FileType('a', encoding='utf-8', bufsize=16), default='data/free.txt',
                     help='a file for storing free domains (default: data/free.txt)')
 parser.add_argument('--occu', type=argparse.FileType('a', encoding='utf-8', bufsize=16), default='data/occu.txt',

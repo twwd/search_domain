@@ -7,7 +7,7 @@ import pattern
 class TestPatternValidator(unittest.TestCase):
 
     def test_simple_valid(self):
-        testcases = ['abc.de', 'LLL.de', 'L-L.de', 'NNNNNabcd.de', 'AA.de']
+        testcases = ['abc.de', 'LLL.de', 'L-L.de', 'DDDDDabcd.de', 'AA.de']
         for testcase in testcases:
             self.assertEqual(pattern.validator(testcase), testcase)
 
@@ -25,7 +25,7 @@ class TestPatternValidator(unittest.TestCase):
         with self.assertRaises(argparse.ArgumentTypeError):
             pattern.validator('ajkf-.de')
         with self.assertRaises(argparse.ArgumentTypeError):
-            pattern.validator('LNajd-')
+            pattern.validator('LDajd-')
 
     def test_tld_adding(self):
         self.assertEqual(pattern.validator('AA'), 'AA.de')
@@ -44,7 +44,7 @@ class TestPatternGenerateCandidates(unittest.TestCase):
 
     def test_simple(self):
         self.assertEqual(pattern.generate_candiates('a.de'), ['a.de'])
-        self.assertEqual(pattern.generate_candiates('A.de'), ['{}.de'.format(c) for c in pattern.LETTERS + pattern.NUMBERS])
+        self.assertEqual(pattern.generate_candiates('A.de'), ['{}.de'.format(c) for c in pattern.LETTERS + pattern.DIGITS])
 
     def test_no_dashes_at_start(self):
         self.assertEqual(len(list(filter(lambda elem: elem[0] is '-', pattern.generate_candiates('AAA.de')))), 0)
@@ -53,12 +53,12 @@ class TestPatternGenerateCandidates(unittest.TestCase):
         self.assertEqual(len(list(filter(lambda elem: elem[-3] is '-', pattern.generate_candiates('abA.de')))), 0)
 
     def test_generate_enough_candidates(self):
-        len_numbers = len(pattern.NUMBERS)
+        len_digits = len(pattern.DIGITS)
         len_letters = len(pattern.LETTERS)
-        len_arbitrary = len_letters + len_numbers
+        len_arbitrary = len_letters + len_digits
 
         self.assertEqual(len(pattern.generate_candiates('ahakjdgfdsghfgjfgb.de')), 1)
-        self.assertEqual(len(pattern.generate_candiates('N.de')), len_numbers)
+        self.assertEqual(len(pattern.generate_candiates('D.de')), len_digits)
         self.assertEqual(len(pattern.generate_candiates('L.de')), len_letters)
         self.assertEqual(len(pattern.generate_candiates('A.de')), len_arbitrary)
         self.assertEqual(len(pattern.generate_candiates('AA.de')), len_arbitrary * len_arbitrary)

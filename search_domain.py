@@ -30,7 +30,7 @@ MIN_WAIT = 10
 MAX_WAIT = 300
 WAIT_REQ = 1  # time to wait between whois requests
 
-MAINTENANCE_ITERATIONS = 2  # number of iterations between status output and finding persitence
+MAINTENANCE_ITERATIONS = 50  # number of iterations between status output and finding persitence
 
 # Init
 log = Logger(args.verbose)

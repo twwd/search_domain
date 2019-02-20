@@ -40,6 +40,7 @@ def generate_candiates(pattern: str):
         c = pattern[i]
         if c in 'LDA':
             candiates = append_to_items(candiates, tmp_part)  # append chars that occured before
+            tmp_part = ''
             if c is 'L':
                 candiates = str_product(candiates, LETTERS)
             elif c is 'D':

@@ -6,5 +6,5 @@ def process(filename):
         w.writelines(content)
 
 
-process("free_domains.txt")
-process("occu_domains.txt")
+process("data/free.txt")
+process("data/occu.txt")

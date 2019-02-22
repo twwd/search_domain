@@ -140624,3 +140624,5 @@ ltru.de
 ltrl.de
 ltsf.de
 lttf.de
+walter4.de
+walter2.de

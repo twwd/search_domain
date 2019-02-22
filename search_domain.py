@@ -1,39 +1,16 @@
 #!/usr/bin/env python3
-
-import argparse
-import datetime
-import signal
 import time
+from io import TextIOWrapper
 
-import chunk
+import chunking
+import cli
 import dns
 import pattern
 import whois
+from findings import Findings
 from logger import Logger
 
-parser = argparse.ArgumentParser(description='Find free .de domains. Requires either a wordlist or a pattern.')
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument('--wordlist', '-w', type=argparse.FileType('r', encoding='utf-8'), help='a file with a list of .de domains to test')
-group.add_argument('--pattern', '-p', type=pattern.validator,
-                   help='a pattern for the domain generation. Allowed elements: lowercase letters, numbers, dash, '
-                        'L for an arbitrary letter, D for an arbitrary digit, and A for an arbitrary allowed char.')
-parser.add_argument('--free', type=argparse.FileType('a', encoding='utf-8', bufsize=16), default='data/free.txt',
-                    help='a file for storing free domains (default: data/free.txt)')
-parser.add_argument('--occu', type=argparse.FileType('a', encoding='utf-8', bufsize=16), default='data/occu.txt',
-                    help='a file for storing occupied domains (default: data/occu.txt)')
-parser.add_argument('--skip', type=argparse.FileType('r', encoding='utf-8'), nargs='*', help='one or multiple files containing domains that should be skipped')
-parser.add_argument('--part', type=chunk.validator, help='if you want to chunk the domains to test, this specifies which chunk should be processed')
-parser.add_argument('--chunks', type=chunk.validator, help='the number of chunks')
-parser.add_argument('--verbose', '-v', action='count', help='enable logging')
-parser.add_argument('--version', action='version', version='%(prog)s 0.1')
-
-args = parser.parse_args()
-
-if bool(args.chunk) ^ bool(args.chunks):
-    parser.error('--chunk and --chunks must be given together')
-
-if args.chunk is not None and args.chunks is not None and args.chunk > args.chunks:
-    parser.error("--chunk must be equal or less than --chunks")
+args = cli.args
 
 MIN_WAIT = 10
 MAX_WAIT = 300
@@ -41,102 +18,60 @@ WAIT_REQ = 1  # time to wait between whois requests
 
 MAINTENANCE_ITERATIONS = 50  # number of iterations between status output and finding persitence
 
+
+def generate_domain_list(pattern_str: str, wordlist_file: TextIOWrapper, skip_files: list, chunk: int, chunks: int, l: Logger):
+    if pattern_str is not None:
+        d = pattern.generate_candiates(pattern_str)
+    else:
+        d = [l.rstrip('\n') for l in wordlist_file.readlines()]
+        wordlist_file.close()
+
+    l.log('{} domains to test (initially)'.format(len(d)))
+
+    if skip_files is not None:
+        domains_to_skip = []
+        for file in skip_files:
+            domains_to_skip.extend(l.rstrip('\n') for l in file.readlines())
+            file.close()
+        d = sorted(set(d) - set(domains_to_skip))
+
+    if chunk is not None and chunks is not None:
+        # find the chunk of the list
+        l.log("Take chunk {} of {}".format(chunk, chunks))
+        d = chunking.get(d, chunk, chunks)
+
+    length = len(d)
+
+    l.log('{} domains to test (after skipping and chunking)'.format(length))
+
+    return d, length
+
+
 # Init
 log = Logger(args.verbose)
 wait = MIN_WAIT
-domains = []
 domains_index = 0
-occu = set()
-free = set()
+findings = Findings(log, args.free, args.occu)
 
-if args.pattern is not None:
-    domains = pattern.generate_candiates(args.pattern)
-else:
-    domains = [l.rstrip('\n') for l in args.wordlist.readlines()]
-    args.wordlist.close()
+domains, domains_len = generate_domain_list(args.pattern, args.wordlists, args.skip, args.chunk, args.chunks, log)
 
-
-def shutdown(exit_code=0):
-    global args
-    args.free.close()
-    args.occu.close()
-    exit(exit_code)
-
-
-def skip_domains(domains_to_test, domains_to_skip):
-    return sorted(set(domains_to_test) - set(domains_to_skip))
-
-
-if args.skip is not None:
-    domains_to_skip = []
-    for file in args.skip:
-        domains_to_skip.extend(l.rstrip('\n') for l in file.readlines())
-        file.close()
-    domains = skip_domains(domains, domains_to_skip)
-
-
-def persist_findings():
-    global occu, free
-    for item in occu:
-        args.occu.write('{}\n'.format(item))
-    occu = set()
-    for item in free:
-        args.free.write('{}\n'.format(item))
-    free = set()
-
-
-def process_domain(domain, is_free=False):
-    if is_free:
-        log.free(domain)
-        free.add(domain)
-    else:
-        log.occu(domain)
-        occu.add(domain)
-
-
-# Handle Ctrl + C
-def signal_handler(sig, frame):
-    persist_findings()
-    log.log("Stopped by Ctrl + C")
-    shutdown(-1)
-
-
-signal.signal(signal.SIGINT, signal_handler)
-
-if args.chunk is not None and args.chunks is not None:
-    # find the chunk of the list
-    log.log("Take chunk {} of {}".format(args.chunk, args.chunks))
-    domains = chunk.get(domains, args.chunk, args.chunks)
-
-domains_len = len(domains)
-
-log.log('{} domains to test (after skipping and chunking)'.format(domains_len))
-
-# stats
-start_time = datetime.datetime.now()
-last_print_time = start_time
+log.start_timer()
 
 while domains_index < domains_len:
     domain = domains[domains_index]
     try:
         if dns.has_ip(domain):
-            process_domain(domain)
+            findings.add_domain(domain)
         else:
             time.sleep(WAIT_REQ)  # prevent rate limiting
             if whois.has_entry(domain):
-                process_domain(domain)
+                findings.add_domain(domain)
             else:
-                process_domain(domain, True)
+                findings.add_domain(domain, True)
 
         if domains_index != 0 and domains_index % MAINTENANCE_ITERATIONS is 0:
-            persist_findings()
-            now = datetime.datetime.now()
-            if log.log_enabled():
-                time_per_domain = (now - last_print_time) / MAINTENANCE_ITERATIONS * 0.66 + (now - start_time) / domains_index * 0.33
-                remaining_time = time_per_domain * (domains_len - domains_index)
-                remaining_time = remaining_time - datetime.timedelta(microseconds=remaining_time.microseconds)  # remove microseconds for printing
-                log.log('{} of {} ({:.2f}%, approx. {} remaining)'.format(domains_index, domains_len, domains_index / domains_len * 100, remaining_time))
-            last_print_time = now
+            findings.persist()
+            log.remaining_time(domains_index, MAINTENANCE_ITERATIONS, domains_len)
 
         domains_index += 1
 
@@ -148,8 +83,4 @@ while domains_index < domains_len:
 
     except Exception as e:
         log.error(e, True)
-        persist_findings()
-        shutdown(-1)
-
-persist_findings()
-shutdown()
+        exit(-1)

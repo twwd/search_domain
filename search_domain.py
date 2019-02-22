@@ -5,6 +5,7 @@ import datetime
 import signal
 import time
 
+import chunk
 import dns
 import pattern
 import whois
@@ -21,10 +22,18 @@ parser.add_argument('--free', type=argparse.FileType('a', encoding='utf-8', bufs
 parser.add_argument('--occu', type=argparse.FileType('a', encoding='utf-8', bufsize=16), default='data/occu.txt',
                     help='a file for storing occupied domains (default: data/occu.txt)')
 parser.add_argument('--skip', type=argparse.FileType('r', encoding='utf-8'), nargs='*', help='one or multiple files containing domains that should be skipped')
+parser.add_argument('--part', type=chunk.validator, help='if you want to chunk the domains to test, this specifies which chunk should be processed')
+parser.add_argument('--chunks', type=chunk.validator, help='the number of chunks')
 parser.add_argument('--verbose', '-v', action='count', help='enable logging')
 parser.add_argument('--version', action='version', version='%(prog)s 0.1')
 
 args = parser.parse_args()
+
+if bool(args.chunk) ^ bool(args.chunks):
+    parser.error('--chunk and --chunks must be given together')
+
+if args.chunk is not None and args.chunks is not None and args.chunk > args.chunks:
+    parser.error("--chunk must be equal or less than --chunks")
 
 MIN_WAIT = 10
 MAX_WAIT = 300
@@ -94,9 +103,14 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
+if args.chunk is not None and args.chunks is not None:
+    # find the chunk of the list
+    log.log("Take chunk {} of {}".format(args.chunk, args.chunks))
+    domains = chunk.get(domains, args.chunk, args.chunks)
+
 domains_len = len(domains)
 
-log.log('{} domains to test'.format(domains_len))
+log.log('{} domains to test (after skipping and chunking)'.format(domains_len))
 
 # stats
 start_time = datetime.datetime.now()

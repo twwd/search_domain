@@ -14,7 +14,7 @@ parser.add_argument('--free', type=argparse.FileType('a', encoding='utf-8', bufs
 parser.add_argument('--occu', type=argparse.FileType('a', encoding='utf-8', bufsize=16), default='data/occu.txt',
                     help='a file for storing occupied domains (default: data/occu.txt)')
 parser.add_argument('--skip', type=argparse.FileType('r', encoding='utf-8'), nargs='*', help='one or multiple files containing domains that should be skipped')
-parser.add_argument('--part', type=chunking.validator, help='if you want to chunk the domains to test, this specifies which chunk should be processed')
+parser.add_argument('--chunk', type=chunking.validator, help='if you want to chunk the list of test domains, this specifies which chunk should be processed')
 parser.add_argument('--chunks', type=chunking.validator, help='the number of chunks')
 parser.add_argument('--verbose', '-v', action='count', help='enable logging')
 parser.add_argument('--version', action='version', version='%(prog)s 0.1')

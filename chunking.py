@@ -1,5 +1,4 @@
 import argparse
-import collections
 
 
 def validator(string):
@@ -11,17 +10,14 @@ def validator(string):
     return value
 
 
-def get(l: collections.abc.Sequence, chunk: int, chunks: int):
+def get(l: list, chunk: int, chunks: int):
     if chunks == 1:
         return l
 
-    part_size = int(len(l) / chunks)
+    chunk_size, _ = divmod(len(l), chunks)
 
-    if chunk == 1:
-        return l[:part_size]
+    # Append the surplus items to the last chunk
+    if chunk != chunks:
+        return l[(chunk - 1) * chunk_size:chunk * chunk_size]
     else:
-        start = part_size * (chunk - 1)
-        if chunk == chunks:
-            return l[start:]
-        else:
-            return l[start: start + part_size]
+        return l[(chunk - 1) * chunk_size:]

@@ -53,7 +53,7 @@ wait = MIN_WAIT
 domains_index = 0
 findings = Findings(log, args.free, args.occu)
 
-domains, domains_len = generate_domain_list(args.pattern, args.wordlists, args.skip, args.chunk, args.chunks, log)
+domains, domains_len = generate_domain_list(args.pattern, args.wordlist, args.skip, args.chunk, args.chunks, log)
 
 log.start_timer()
 
